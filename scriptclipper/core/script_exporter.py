@@ -12,12 +12,14 @@ HEADERS = ["主题", "场景", "文案内容", "画面内容", "音效"]
 
 
 def build_script_rows(project: ProjectModel) -> list[dict[str, str]]:
-    row_count = max(len(project.a_roll), len(project.b_roll), 1)
+    a_roll = sorted(project.a_roll, key=lambda clip: clip.start_time)
+    b_roll = sorted(project.b_roll, key=lambda clip: clip.start_time)
+    row_count = max(len(a_roll), len(b_roll), 1)
     rows: list[dict[str, str]] = []
     theme = project.project_name or "Untitled"
     for index in range(row_count):
-        a_clip = project.a_roll[index] if index < len(project.a_roll) else None
-        b_clip = project.b_roll[index] if index < len(project.b_roll) else None
+        a_clip = a_roll[index] if index < len(a_roll) else None
+        b_clip = b_roll[index] if index < len(b_roll) else None
         rows.append(
             {
                 "主题": theme if index == 0 else "",

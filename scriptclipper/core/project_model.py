@@ -71,6 +71,13 @@ def split_script_text(text: str) -> list[str]:
     return [part.strip() for part in parts if part.strip()]
 
 
+def normalize_clip_type(value: str) -> str:
+    normalized = value.replace("-", "_")
+    if normalized in {"a_roll", "b_roll"}:
+        return normalized
+    return "a_roll"
+
+
 @dataclass
 class ARollAsset:
     id: str
@@ -96,7 +103,7 @@ class ARollAsset:
             id=str(data.get("id", make_id("a"))),
             type="a_roll",
             title=str(data.get("title", "")),
-            text=str(data.get("text", "")),
+            text=str(data.get("text", data.get("content", ""))),
             duration=float(data.get("duration", 1.0)),
             note=str(data.get("note", "")),
             emotion=str(data.get("emotion", "")),
@@ -152,10 +159,13 @@ class TimelineClip:
     text: str = ""
     note: str = ""
     emotion: str = ""
+    start_time: float = 0.0
+    track: str = ""
+    details: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_a_asset(cls, asset: ARollAsset) -> "TimelineClip":
-        return cls(
+        clip = cls(
             id=make_id("clip"),
             type="a_roll",
             source_id=asset.id,
@@ -164,62 +174,98 @@ class TimelineClip:
             duration=asset.duration,
             note=asset.note,
             emotion=asset.emotion,
+            track="a_roll",
         )
+        clip.ensure_detail_defaults()
+        return clip
 
     @classmethod
     def from_b_asset(cls, asset: BRollAsset, number: int) -> "TimelineClip":
-        return cls(
+        clip = cls(
             id=make_id("clip"),
             type="b_roll",
             source_id=asset.id,
             title=asset.title or f"画面{number}",
             duration=max(1.0, float(asset.duration)),
             note=asset.note,
+            track="b_roll",
         )
+        clip.ensure_detail_defaults()
+        return clip
 
     @classmethod
     def new_broll(cls, duration: float, number: int) -> "TimelineClip":
-        return cls(
+        clip = cls(
             id=make_id("clip"),
             type="b_roll",
             title=f"画面{number}",
             duration=max(1.0, float(duration)),
             note="画面占位",
+            track="b_roll",
         )
+        clip.ensure_detail_defaults()
+        return clip
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any], clip_type: str) -> "TimelineClip":
-        return cls(
+    def from_dict(cls, data: dict[str, Any], clip_type: str, default_start: float = 0.0) -> "TimelineClip":
+        normalized_type = normalize_clip_type(str(data.get("type", clip_type)))
+        details = data.get("details") if isinstance(data.get("details"), dict) else {}
+        note = str(data.get("note", details.get("note", "")))
+        emotion_key = "tone" if normalized_type == "a_roll" else "sound"
+        clip = cls(
             id=str(data.get("id", make_id("clip"))),
-            type=str(data.get("type", clip_type)),
+            type=normalized_type,
             source_id=str(data.get("source_id", "")),
             title=str(data.get("title", "")),
-            text=str(data.get("text", "")),
-            duration=float(data.get("duration", 1.0)),
-            note=str(data.get("note", "")),
-            emotion=str(data.get("emotion", "")),
+            text=str(data.get("text", data.get("content", ""))),
+            duration=max(0.1, float(data.get("duration", 1.0))),
+            note=note,
+            emotion=str(data.get("emotion", details.get(emotion_key, ""))),
+            start_time=max(0.0, float(data.get("startTime", data.get("start_time", default_start)))),
+            track=normalize_clip_type(str(data.get("track", normalized_type))),
+            details=dict(details),
         )
+        clip.ensure_detail_defaults()
+        return clip
+
+    def ensure_detail_defaults(self) -> None:
+        if self.type == "a_roll":
+            defaults = {
+                "tone": self.emotion,
+                "speed": "",
+                "pauseHint": "",
+                "subtitleFocus": "",
+                "note": self.note,
+            }
+        else:
+            defaults = {
+                "shotSize": "",
+                "cameraMove": "",
+                "action": "",
+                "keywords": "",
+                "sound": self.emotion,
+                "note": self.note,
+            }
+        merged = dict(defaults)
+        merged.update(self.details or {})
+        self.details = merged
+        self.track = self.track or self.type
 
     def to_dict(self) -> dict[str, Any]:
-        if self.type == "a_roll":
-            return {
-                "id": self.id,
-                "source_id": self.source_id,
-                "text": self.text,
-                "duration": self.duration,
-                "title": self.title,
-                "note": self.note,
-                "emotion": self.emotion,
-            }
+        self.ensure_detail_defaults()
         return {
             "id": self.id,
-            "type": "b_roll",
+            "type": self.type,
             "source_id": self.source_id,
+            "track": self.track or self.type,
             "title": self.title,
+            "content": self.text,
             "text": self.text,
+            "startTime": round(float(self.start_time), 3),
             "duration": self.duration,
             "note": self.note,
             "emotion": self.emotion,
+            "details": self.details,
         }
 
 
@@ -261,6 +307,7 @@ class ProjectModel:
         if not asset:
             return None
         clip = TimelineClip.from_a_asset(asset)
+        clip.start_time = self.next_start_time("a_roll")
         self.a_roll.append(clip)
         self.dirty = True
         return clip
@@ -274,6 +321,7 @@ class ProjectModel:
                 clip = TimelineClip.new_broll(self.settings.get("broll_default_duration", 3), len(self.b_roll) + 1)
         else:
             clip = TimelineClip.new_broll(self.settings.get("broll_default_duration", 3), len(self.b_roll) + 1)
+        clip.start_time = self.next_start_time("b_roll")
         self.b_roll.append(clip)
         self.dirty = True
         return clip
@@ -304,8 +352,24 @@ class ProjectModel:
         track.insert(to_index, clip)
         self.dirty = True
 
+    def move_clip_to_time(self, clip_id: str, start_time: float) -> TimelineClip | None:
+        clip = self.find_clip(clip_id)
+        if not clip:
+            return None
+        clip.start_time = max(0.0, round(float(start_time), 1))
+        self.dirty = True
+        return clip
+
+    def next_start_time(self, track_name: str) -> float:
+        track = self.a_roll if track_name == "a_roll" else self.b_roll
+        return round(max((clip.start_time + clip.duration for clip in track), default=0.0), 1)
+
     def timeline_duration(self) -> float:
-        return max(sum(c.duration for c in self.a_roll), sum(c.duration for c in self.b_roll), 15.0)
+        return max(
+            max((clip.start_time + clip.duration for clip in self.a_roll), default=0.0),
+            max((clip.start_time + clip.duration for clip in self.b_roll), default=0.0),
+            15.0,
+        )
 
     def tick_count(self) -> int:
         return int(math.ceil(self.timeline_duration() / 5.0)) + 1
@@ -322,8 +386,8 @@ class ProjectModel:
             settings=settings,
             asset_pool=[ARollAsset.from_dict(item) for item in (aroll_assets if aroll_assets is not None else DEFAULT_AROLL_ASSETS)],
             broll_asset_pool=[BRollAsset.from_dict(item) for item in broll_assets],
-            a_roll=[TimelineClip.from_dict(item, "a_roll") for item in timeline.get("a_roll", [])],
-            b_roll=[TimelineClip.from_dict(item, "b_roll") for item in timeline.get("b_roll", [])],
+            a_roll=_clips_from_track(timeline.get("a_roll", []), "a_roll"),
+            b_roll=_clips_from_track(timeline.get("b_roll", []), "b_roll"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -337,3 +401,13 @@ class ProjectModel:
                 "b_roll": [clip.to_dict() for clip in self.b_roll],
             },
         }
+
+
+def _clips_from_track(items: list[dict[str, Any]], clip_type: str) -> list[TimelineClip]:
+    clips: list[TimelineClip] = []
+    cursor = 0.0
+    for item in items:
+        clip = TimelineClip.from_dict(item, clip_type, default_start=cursor)
+        clips.append(clip)
+        cursor = clip.start_time + clip.duration
+    return clips

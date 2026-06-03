@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 
 from PySide6.QtCore import QByteArray, QDataStream, QIODevice, QRect, Qt, Signal
-from PySide6.QtGui import QColor, QDrag, QFont, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QScrollArea, QSlider, QVBoxLayout, QWidget
 
 from scriptclipper.core.project_model import ProjectModel, TimelineClip
@@ -57,19 +57,20 @@ class RhythmPreview(QWidget):
         total_duration: float,
         color: QColor,
     ) -> None:
-        cursor = left
         for clip in clips:
+            cursor = left + int((clip.start_time / total_duration) * total_width)
             width = max(12, int((clip.duration / total_duration) * total_width))
             painter.setBrush(color)
             painter.setPen(Qt.NoPen)
             painter.drawRoundedRect(QRect(cursor, y, width - 3, 28), 5, 5)
-            cursor += width
 
 
 class TimelineCanvas(QWidget):
     clip_selected = Signal(str)
     asset_dropped = Signal(str, str)
     clip_reordered = Signal(str, int, int)
+    clip_moved = Signal(str, float)
+    status_message = Signal(str, int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -78,6 +79,9 @@ class TimelineCanvas(QWidget):
         self.clip_rects: dict[str, tuple[str, int, QRect]] = {}
         self.drag_clip_id: str | None = None
         self.drag_start_pos = None
+        self.drag_original_start_time = 0.0
+        self.drag_preview_start_time: float | None = None
+        self.drag_started = False
         self.pixels_per_second = 52
         self.label_w = 112
         self.ruler_h = 36
@@ -200,23 +204,52 @@ class TimelineCanvas(QWidget):
         painter.setFont(QFont("Segoe UI", 11))
         painter.drawText(16, y + 34, label)
 
-        cursor = label_w
+        overlaps = self._overlap_ids(clips)
         for index, clip in enumerate(clips):
             width = max(52, int(clip.duration * self.pixels_per_second))
+            start_time = self._draw_start_time(clip)
+            cursor = label_w + int(start_time * self.pixels_per_second)
             rect = QRect(cursor + 3, y + 9, width - 6, track_h - 18)
             self.clip_rects[clip.id] = (track_name, index, rect)
 
             selected = clip.id == self.selected_clip_id
+            overlapped = clip.id in overlaps
             painter.setBrush(color.lighter(125) if selected else color)
-            painter.setPen(QPen(QColor("#ffffff") if selected else border_color, 2 if selected else 1))
+            if overlapped:
+                pen = QPen(QColor("#ff5a5f"), 3)
+            else:
+                pen = QPen(QColor("#ffffff") if selected else border_color, 2 if selected else 1)
+            painter.setPen(pen)
             painter.drawRoundedRect(rect, 6, 6)
             painter.setPen(QColor("#0f1115"))
             title = clip.title or clip.text or "clip"
             painter.setFont(QFont("Segoe UI", 10))
             painter.drawText(rect.adjusted(8, 4, -6, -18), Qt.AlignLeft | Qt.AlignVCenter, title[:28])
             painter.setFont(QFont("Segoe UI", 8))
-            painter.drawText(rect.adjusted(8, 24, -6, -4), Qt.AlignLeft | Qt.AlignVCenter, f"{clip.duration:.1f}s")
-            cursor += width
+            painter.drawText(
+                rect.adjusted(8, 24, -6, -4),
+                Qt.AlignLeft | Qt.AlignVCenter,
+                f"{start_time:.1f}s / {clip.duration:.1f}s",
+            )
+
+    def _draw_start_time(self, clip: TimelineClip) -> float:
+        if clip.id == self.drag_clip_id and self.drag_preview_start_time is not None:
+            return self.drag_preview_start_time
+        return clip.start_time
+
+    def _overlap_ids(self, clips: list[TimelineClip]) -> set[str]:
+        overlaps: set[str] = set()
+        sorted_clips = sorted(clips, key=lambda item: item.start_time)
+        for index, clip in enumerate(sorted_clips):
+            clip_start = self._draw_start_time(clip)
+            clip_end = clip_start + clip.duration
+            for other in sorted_clips[index + 1:]:
+                other_start = self._draw_start_time(other)
+                if other_start >= clip_end:
+                    break
+                overlaps.add(clip.id)
+                overlaps.add(other.id)
+        return overlaps
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() != Qt.LeftButton:
@@ -226,33 +259,67 @@ class TimelineCanvas(QWidget):
                 self.selected_clip_id = clip_id
                 self.drag_clip_id = clip_id
                 self.drag_start_pos = event.position().toPoint()
+                clip = self.project.find_clip(clip_id) if self.project else None
+                self.drag_original_start_time = clip.start_time if clip else 0.0
+                self.drag_preview_start_time = self.drag_original_start_time
+                self.drag_started = False
+                self.setCursor(Qt.ClosedHandCursor)
                 self.clip_selected.emit(clip_id)
                 self.update()
                 return
         self.selected_clip_id = None
         self.drag_clip_id = None
+        self.drag_preview_start_time = None
+        self.drag_started = False
         self.clip_selected.emit("")
         self.update()
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        pos = event.position().toPoint()
         if not self.drag_clip_id or not self.drag_start_pos:
+            self._update_hover_cursor(pos)
             return
-        if (event.position().toPoint() - self.drag_start_pos).manhattanLength() < 12:
+        if not event.buttons() & Qt.LeftButton:
+            self._update_hover_cursor(pos)
             return
-        drag = QDrag(self)
-        drag.setMimeData(self._mime_data_for_clip(self.drag_clip_id))
-        drag.exec(Qt.MoveAction)
-        self.drag_clip_id = None
+        if (pos - self.drag_start_pos).manhattanLength() < 4 and not self.drag_started:
+            return
+        self.drag_started = True
+        delta_seconds = (pos.x() - self.drag_start_pos.x()) / max(1, self.pixels_per_second)
+        next_start = self._snap_time(self.drag_original_start_time + delta_seconds)
+        self.drag_preview_start_time = max(0.0, next_start)
+        self.status_message.emit(f"移动到 {self.drag_preview_start_time:.1f}s", 0)
+        self.update()
 
-    def _mime_data_for_clip(self, clip_id: str):
-        from PySide6.QtCore import QMimeData
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.LeftButton and self.drag_clip_id:
+            clip_id = self.drag_clip_id
+            next_start = self.drag_preview_start_time if self.drag_preview_start_time is not None else self.drag_original_start_time
+            moved = self.drag_started and abs(next_start - self.drag_original_start_time) >= 0.001
+            self.drag_clip_id = None
+            self.drag_start_pos = None
+            self.drag_preview_start_time = None
+            self.drag_started = False
+            self.unsetCursor()
+            if moved:
+                self.clip_moved.emit(clip_id, next_start)
+            self.update()
+            return
+        self.unsetCursor()
 
-        payload = QByteArray()
-        stream = QDataStream(payload, QIODevice.WriteOnly)
-        stream.writeQString(clip_id)
-        mime = QMimeData()
-        mime.setData(TIMELINE_CLIP_MIME_TYPE, payload)
-        return mime
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        if not self.drag_clip_id:
+            self.unsetCursor()
+
+    def _update_hover_cursor(self, pos) -> None:
+        for _, _, rect in self.clip_rects.values():
+            if rect.contains(pos):
+                self.setCursor(Qt.OpenHandCursor)
+                return
+        self.unsetCursor()
+
+    def _snap_time(self, seconds: float) -> float:
+        return round(max(0.0, seconds) * 2) / 2
 
     def dragEnterEvent(self, event) -> None:  # noqa: N802
         formats = (A_ROLL_MIME_TYPE, B_ROLL_MIME_TYPE, TIMELINE_CLIP_MIME_TYPE)
@@ -273,17 +340,6 @@ class TimelineCanvas(QWidget):
             self.asset_dropped.emit("b_roll", self._read_payload(event.mimeData().data(B_ROLL_MIME_TYPE)))
             event.acceptProposedAction()
             return
-
-        if event.mimeData().hasFormat(TIMELINE_CLIP_MIME_TYPE):
-            clip_id = self._read_payload(event.mimeData().data(TIMELINE_CLIP_MIME_TYPE))
-            original = self.clip_rects.get(clip_id)
-            if original:
-                track_name, from_index, _ = original
-                if self._track_at_y(pos.y()) != track_name:
-                    return
-                to_index = self._index_at_position(track_name, pos.x())
-                self.clip_reordered.emit(track_name, from_index, to_index)
-                event.acceptProposedAction()
 
     def _read_payload(self, payload: QByteArray) -> str:
         stream = QDataStream(payload, QIODevice.ReadOnly)
@@ -315,6 +371,8 @@ class TimelineWidget(QWidget):
     clip_selected = Signal(str)
     asset_dropped = Signal(str, str)
     clip_reordered = Signal(str, int, int)
+    clip_moved = Signal(str, float)
+    status_message = Signal(str, int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -357,6 +415,8 @@ class TimelineWidget(QWidget):
         self.canvas.clip_selected.connect(self.clip_selected)
         self.canvas.asset_dropped.connect(self.asset_dropped)
         self.canvas.clip_reordered.connect(self.clip_reordered)
+        self.canvas.clip_moved.connect(self.clip_moved)
+        self.canvas.status_message.connect(self.status_message)
 
     def set_project(self, project: ProjectModel) -> None:
         self.canvas.set_project(project)

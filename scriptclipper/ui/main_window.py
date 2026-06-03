@@ -114,12 +114,15 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
 
     def _connect_signals(self) -> None:
-        self.parameter_panel.settings_changed.connect(self.update_settings)
+        self.asset_panel.asset_selected.connect(self.select_clip_from_asset)
+        self.parameter_panel.clip_changed.connect(self.update_clip_fields)
         self.timeline.add_broll_requested.connect(self.add_broll_clip)
         self.timeline.delete_requested.connect(self.delete_selected_clip)
         self.timeline.clip_selected.connect(self.select_clip)
         self.timeline.asset_dropped.connect(self.add_clip_from_asset)
         self.timeline.clip_reordered.connect(self.reorder_clip)
+        self.timeline.clip_moved.connect(self.move_clip_to_time)
+        self.timeline.status_message.connect(self.show_status_message)
         self.script_editor.clip_changed.connect(self.update_clip_fields)
 
     def refresh_all(self) -> None:
@@ -262,8 +265,16 @@ class MainWindow(QMainWindow):
         self.selected_clip_id = clip_id or None
         clip = self.project.find_clip(self.selected_clip_id)
         self.script_editor.set_clip(clip)
+        self.parameter_panel.set_clip(clip)
         if update_canvas:
             self.timeline.set_selected_clip(self.selected_clip_id)
+
+    def select_clip_from_asset(self, asset_id: str) -> None:
+        clip = next((item for item in self.project.a_roll + self.project.b_roll if item.source_id == asset_id), None)
+        if not clip:
+            self.statusBar().showMessage("该素材尚未加入时间轴，请先拖入对应轨道", 3000)
+            return
+        self.select_clip(clip.id)
 
     def update_clip_fields(self, clip_id: str, fields: dict) -> None:
         clip = self.project.find_clip(clip_id)
@@ -273,8 +284,21 @@ class MainWindow(QMainWindow):
         clip.text = fields.get("text", clip.text)
         clip.note = fields.get("note", clip.note)
         clip.emotion = fields.get("emotion", clip.emotion)
+        if "duration" in fields:
+            clip.duration = max(0.1, float(fields["duration"]))
+        if isinstance(fields.get("details"), dict):
+            clip.details.update(fields["details"])
+            if clip.type == "a_roll":
+                clip.details["tone"] = clip.emotion
+            else:
+                clip.details["sound"] = clip.emotion
+            clip.details["note"] = clip.note
+        clip.ensure_detail_defaults()
         self.project.dirty = True
-        self.timeline.canvas.update()
+        self.script_editor.set_clip(clip)
+        self.parameter_panel.set_clip(clip)
+        self.timeline.set_project(self.project)
+        self.timeline.set_selected_clip(self.selected_clip_id)
         self.rhythm_preview.update()
         self._update_window_title()
 
@@ -298,6 +322,23 @@ class MainWindow(QMainWindow):
         self.project.move_clip(track_name, from_index, to_index)
         self.refresh_all()
         self.statusBar().showMessage("Reordered timeline clip", 2500)
+
+    def move_clip_to_time(self, clip_id: str, start_time: float) -> None:
+        clip = self.project.move_clip_to_time(clip_id, start_time)
+        if not clip:
+            self.statusBar().showMessage("移动失败：片段不存在", 3000)
+            return
+        self.selected_clip_id = clip.id
+        self.timeline.set_project(self.project)
+        self.timeline.set_selected_clip(clip.id)
+        self.rhythm_preview.set_project(self.project)
+        self.script_editor.set_clip(clip)
+        self.parameter_panel.set_clip(clip)
+        self._update_window_title()
+        self.statusBar().showMessage(f"已移动片段：{clip.title or clip.id}，开始时间 {clip.start_time:.1f}s", 4000)
+
+    def show_status_message(self, message: str, timeout: int = 0) -> None:
+        self.statusBar().showMessage(message, timeout)
 
     def reset_layout(self) -> None:
         self.main_splitter.setSizes([330, 790, 320])
