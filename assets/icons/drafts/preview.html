@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ScriptClipper Icon Drafts</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1020;
+      --panel: #111827;
+      --panel-2: #0f172a;
+      --line: #243145;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --blue: #38bdf8;
+      --yellow: #fbbf24;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 24px 56px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      font-weight: 650;
+    }
+
+    .intro {
+      margin: 0 0 28px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .grid {
+      display: grid;
+      gap: 18px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: linear-gradient(180deg, var(--panel), var(--panel-2));
+      padding: 18px;
+    }
+
+    .card h2 {
+      margin: 0 0 6px;
+      font-size: 18px;
+      font-weight: 650;
+    }
+
+    .desc {
+      margin: 0 0 18px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .sizes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: end;
+    }
+
+    .sample {
+      display: grid;
+      justify-items: center;
+      gap: 8px;
+      min-width: 72px;
+    }
+
+    .swatch {
+      display: grid;
+      place-items: center;
+      min-width: 52px;
+      min-height: 52px;
+      border: 1px solid #1f2937;
+      border-radius: 10px;
+      background:
+        linear-gradient(45deg, #0b1020 25%, transparent 25%),
+        linear-gradient(-45deg, #0b1020 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #0b1020 75%),
+        linear-gradient(-45deg, transparent 75%, #0b1020 75%),
+        #101827;
+      background-size: 16px 16px;
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    img {
+      display: block;
+      image-rendering: auto;
+    }
+
+    .palette {
+      display: flex;
+      gap: 10px;
+      margin: 20px 0 30px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>ScriptClipper icon drafts</h1>
+    <p class="intro">Candidate SVG app icons only. These drafts do not replace the application icon or packaging configuration.</p>
+    <div class="palette">
+      <span class="chip"><span class="dot" style="background:#38BDF8"></span>B-roll blue</span>
+      <span class="chip"><span class="dot" style="background:#FBBF24"></span>A-roll yellow</span>
+      <span class="chip"><span class="dot" style="background:#0F172A"></span>dark base</span>
+    </div>
+
+    <section class="grid">
+      <article class="card">
+        <h2>Option 1: Script document + video play</h2>
+        <p class="desc">A document shape signals script editing, while the play button makes the video workflow immediately clear.</p>
+        <div class="sizes" data-icon="app-icon-v1.svg"></div>
+      </article>
+
+      <article class="card">
+        <h2>Option 2: A-roll / B-roll dual timeline</h2>
+        <p class="desc">Two simple lanes emphasize the core A-roll and B-roll timeline model, with the strongest small-size readability.</p>
+        <div class="sizes" data-icon="app-icon-v2.svg"></div>
+      </article>
+
+      <article class="card">
+        <h2>Option 3: Scissors + video clip</h2>
+        <p class="desc">A restrained editing metaphor combines a video card with minimal scissors without leaning too close to legacy editors.</p>
+        <div class="sizes" data-icon="app-icon-v3.svg"></div>
+      </article>
+
+      <article class="card">
+        <h2>Option 4: Letter S + timeline</h2>
+        <p class="desc">An abstract S creates a more logo-like identity while blue and yellow strokes keep the timeline association.</p>
+        <div class="sizes" data-icon="app-icon-v4.svg"></div>
+      </article>
+
+      <article class="card">
+        <h2>Option 5: Structured storyboard cards</h2>
+        <p class="desc">Stacked cards and colored content bars communicate turning script segments into structured edit-ready clips.</p>
+        <div class="sizes" data-icon="app-icon-v5.svg"></div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const sizes = [16, 24, 32, 64, 128, 256];
+    document.querySelectorAll("[data-icon]").forEach((row) => {
+      const icon = row.dataset.icon;
+      sizes.forEach((size) => {
+        const sample = document.createElement("div");
+        sample.className = "sample";
+        const swatch = document.createElement("div");
+        swatch.className = "swatch";
+        const image = document.createElement("img");
+        image.src = icon;
+        image.width = size;
+        image.height = size;
+        image.alt = `${icon} at ${size}px`;
+        const label = document.createElement("div");
+        label.className = "label";
+        label.textContent = `${size}x${size}`;
+        swatch.appendChild(image);
+        sample.appendChild(swatch);
+        sample.appendChild(label);
+        row.appendChild(sample);
+      });
+    });
+  </script>
+</body>
+</html>

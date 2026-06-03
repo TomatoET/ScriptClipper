@@ -1,19 +1,33 @@
 # ScriptClipper
 
-ScriptClipper is a local desktop application for editing video scripts and related project data. It is built with Python and PySide6, with an offline-first workflow for importing text, organizing A-roll and B-roll material, editing clip metadata, and exporting script tables.
+[简体中文](./README.zh-CN.md) | English
+
+ScriptClipper is a local desktop application for editing video scripts and related project data. It is built with Python and PySide6, with an offline-first workflow for importing text, organizing A-Roll and B-Roll material, editing clip metadata, and exporting script tables.
+
+## Download
+
+Please download the Windows package from GitHub Releases:
+
+```text
+ScriptClipper-v0.1.0-windows-x64.zip
+```
+
+Extract the archive and double-click `ScriptClipper.exe`.
 
 ## Features
 
 - Local PySide6 desktop interface.
-- TXT import that splits script text into editable A-roll assets.
-- A-roll and B-roll asset panels with drag-and-drop timeline placement.
-- Timeline view with zoom controls, clip selection, and simple rhythm preview.
-- Clip metadata editing for script copy, visual notes, sound notes, and duration.
-- Project save and open support using local JSON project data.
+- A-Roll / B-Roll dual-track timeline.
+- Structured script editor.
+- Content detail panel for narration and visual clips.
+- Clip dragging and duration resizing.
+- Simplified Chinese / English UI switching.
+- `.sclip` project save and open workflow.
+- TXT import.
 - Export support for project JSON and script tables.
-- Theme selection for the desktop UI.
+- Windows portable package.
 
-## Installation
+## Local Development
 
 ### Requirements
 
@@ -35,58 +49,36 @@ If PowerShell blocks script activation, run:
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-## Running
+### Run
 
 ```powershell
 python main.py
 ```
 
-On Windows, `run_as_admin.bat` can also launch the app with administrator elevation when needed.
-
 ## Packaging
 
-The project does not have a finalized packaging pipeline yet. For `v0.1.0`, the GitHub Release is source-only.
-
-A future Windows build can use PyInstaller or a similar packager. A starting point is:
+Build the Windows portable package with:
 
 ```powershell
-pip install pyinstaller
-pyinstaller --windowed --name ScriptClipper main.py
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 ```
 
-That command is not yet validated as an official release build. Before publishing binaries, verify the generated app launches correctly, includes the Qt resources, and can save, open, import, and export files.
-
-## Screenshots
-
-Screenshots are not included yet. When available, place them under:
-
-```text
-docs/screenshots/
-```
-
-Recommended files:
-
-- `main-window.png`
-- `timeline.png`
-- `export-dialog.png`
+The build output is generated under `release/`. Do not commit `release/`, `build/`, or `dist/` to the source repository. Release artifacts should be uploaded only as GitHub Release attachments.
 
 ## Project Layout
 
 ```text
 .
-├── AGENTS.md
-├── CHANGELOG.md
-├── CONTRIBUTING.md
-├── LICENSE
-├── README.md
-├── SECURITY.md
+├── assets/
+├── scriptclipper/
+│   ├── core/
+│   ├── resources/
+│   └── ui/
+├── scripts/
 ├── main.py
-├── requirements.txt
-├── run_as_admin.bat
-└── scriptclipper/
-    ├── core/
-    ├── resources/
-    └── ui/
+├── ScriptClipper.spec
+├── README.md
+└── README.zh-CN.md
 ```
 
 ## FAQ
@@ -101,22 +93,18 @@ No. `v0.1.0` does not include cloud services, online APIs, or AI backends.
 
 ### Where are projects stored?
 
-Projects are saved to local files through the app's save/open workflow.
+Projects are saved to local `.sclip` files through the app's save/open workflow.
 
 ### Can I install it as a standalone app?
 
-Not yet. `v0.1.0` is source-only and requires Python plus the dependencies in `requirements.txt`.
-
-### Why does the project include `run_as_admin.bat`?
-
-It is a Windows helper for launching the application with administrator elevation when needed. Most development runs should use `python main.py`.
+The current Windows release is a portable package. Download the zip from GitHub Releases, extract it, and run `ScriptClipper.exe`.
 
 ## Roadmap
 
-- `v0.1.x`: improve documentation, add screenshots, and validate basic packaging.
-- `v0.2.x`: add automated tests and CI.
-- `v0.3.x`: improve project file compatibility and export workflows.
-- Future: publish a validated Windows executable or installer.
+- Improve timeline interactions and zoom behavior.
+- Add richer asset management.
+- Add more export formats.
+- Explore video preview and FFmpeg support.
 
 ## Notes
 

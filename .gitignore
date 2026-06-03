@@ -17,8 +17,14 @@ ENV/
 # Build and packaging outputs
 build/
 dist/
+release/
+releases/
 *.egg-info/
-*.spec
+*.exe
+*.zip
+*.msi
+*.dmg
+*.pkg
 
 # PyInstaller artifacts
 *.manifest
@@ -52,6 +58,7 @@ Desktop.ini
 
 # Node artifacts, in case frontend tooling is added later
 node_modules/
+out/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

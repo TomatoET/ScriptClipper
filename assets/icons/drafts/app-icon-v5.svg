@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Structured storyboard cards icon</title>
+  <desc id="desc">Stacked script cards with blue and yellow lines representing structured B-roll and A-roll content.</desc>
+  <rect x="96" y="96" width="832" height="832" rx="192" fill="#0F172A"/>
+  <rect x="316" y="238" width="408" height="494" rx="72" fill="#1E293B" transform="rotate(8 520 485)"/>
+  <rect x="250" y="284" width="464" height="520" rx="78" fill="#111827" stroke="#334155" stroke-width="28"/>
+  <rect x="310" y="356" width="268" height="46" rx="23" fill="#38BDF8"/>
+  <rect x="310" y="452" width="342" height="46" rx="23" fill="#FBBF24"/>
+  <rect x="310" y="548" width="212" height="46" rx="23" fill="#38BDF8"/>
+  <rect x="310" y="644" width="304" height="46" rx="23" fill="#FBBF24"/>
+  <circle cx="676" cy="686" r="74" fill="#3B82F6"/>
+  <path d="M654 648v76l64-38z" fill="#E5E7EB"/>
+</svg>
