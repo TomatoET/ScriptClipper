@@ -1,0 +1,106 @@
+QMainWindow,
+QWidget {
+  background: #111318;
+  color: #e5e8ef;
+  font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+  font-size: 13px;
+}
+
+QMenuBar {
+  background: #191c23;
+  color: #edf0f7;
+  padding: 4px;
+}
+
+QMenuBar::item:selected,
+QMenu::item:selected {
+  background: #2c3442;
+}
+
+QMenu {
+  background: #1d2028;
+  color: #edf0f7;
+  border: 1px solid #343a47;
+}
+
+QSplitter::handle {
+  background: #252a34;
+}
+
+#PanelTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #f4f6fb;
+}
+
+#MutedText {
+  color: #8e96a8;
+}
+
+QListWidget,
+QPlainTextEdit,
+QLineEdit,
+QComboBox,
+QSpinBox {
+  background: #191c23;
+  color: #edf0f7;
+  border: 1px solid #303642;
+  border-radius: 6px;
+  selection-background-color: #3a72e8;
+  padding: 6px;
+}
+
+QListWidget {
+  outline: none;
+  padding: 6px;
+}
+
+QListWidget::item {
+  margin: 5px 0;
+}
+
+#AssetCard {
+  background: #20242d;
+  border: 1px solid #343b49;
+  border-radius: 8px;
+}
+
+#AssetCard:hover {
+  border: 1px solid #4c8dff;
+}
+
+#AssetMeta {
+  color: #78a7ff;
+  font-weight: 600;
+}
+
+#AssetText {
+  color: #eff2f8;
+}
+
+QPushButton {
+  background: #2d6cdf;
+  border: 1px solid #3978ed;
+  border-radius: 6px;
+  color: white;
+  padding: 7px 12px;
+}
+
+QPushButton:hover {
+  background: #3978ed;
+}
+
+QPushButton:pressed {
+  background: #255bc0;
+}
+
+QPushButton:disabled {
+  background: #2a2e38;
+  border-color: #353b47;
+  color: #707889;
+}
+
+QStatusBar {
+  background: #191c23;
+  color: #aeb6c7;
+}
