@@ -27,6 +27,14 @@ QSplitter::handle {
   background: #252a34;
 }
 
+QSplitter::handle:hover {
+  background: #3a4352;
+}
+
+QSplitter::handle:pressed {
+  background: #4c8dff;
+}
+
 #PanelTitle {
   font-size: 16px;
   font-weight: 600;

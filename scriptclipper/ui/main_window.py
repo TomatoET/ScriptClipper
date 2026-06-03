@@ -26,6 +26,15 @@ from scriptclipper.ui.script_editor import ScriptEditor
 from scriptclipper.ui.timeline_widget import RhythmPreview, TimelineWidget, detect_overlap
 
 
+DEFAULT_MAIN_SPLITTER_RATIO = (22, 54, 24)
+DEFAULT_ROOT_SPLITTER_RATIO = (72, 28)
+MIN_LEFT_WIDTH = 260
+MIN_CENTER_WIDTH = 480
+MIN_RIGHT_WIDTH = 280
+MIN_TOP_HEIGHT = 360
+MIN_TIMELINE_HEIGHT = 180
+
+
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
@@ -104,11 +113,17 @@ class MainWindow(QMainWindow):
         self.setStatusBar(QStatusBar())
 
         center = QWidget()
+        self.center_panel = center
         center_layout = QVBoxLayout(center)
         center_layout.setContentsMargins(0, 0, 0, 0)
         center_layout.setSpacing(8)
         center_layout.addWidget(self.rhythm_preview, 3)
         center_layout.addWidget(self.script_editor, 4)
+
+        self.asset_panel.setMinimumWidth(MIN_LEFT_WIDTH)
+        self.center_panel.setMinimumWidth(MIN_CENTER_WIDTH)
+        self.parameter_panel.setMinimumWidth(MIN_RIGHT_WIDTH)
+        self.timeline.setMinimumHeight(MIN_TIMELINE_HEIGHT)
 
         self.main_splitter = QSplitter(Qt.Horizontal)
         self.main_splitter.addWidget(self.asset_panel)
@@ -117,15 +132,27 @@ class MainWindow(QMainWindow):
         self.main_splitter.setStretchFactor(0, 0)
         self.main_splitter.setStretchFactor(1, 1)
         self.main_splitter.setStretchFactor(2, 0)
-        self.main_splitter.setSizes([330, 790, 320])
+        self.main_splitter.setChildrenCollapsible(False)
+        self.main_splitter.setHandleWidth(8)
+        self.main_splitter.setMinimumHeight(MIN_TOP_HEIGHT)
+
+        self.root_splitter = QSplitter(Qt.Vertical)
+        self.root_splitter.addWidget(self.main_splitter)
+        self.root_splitter.addWidget(self.timeline)
+        self.root_splitter.setStretchFactor(0, 1)
+        self.root_splitter.setStretchFactor(1, 0)
+        self.root_splitter.setChildrenCollapsible(False)
+        self.root_splitter.setHandleWidth(8)
+        self.main_splitter.splitterMoved.connect(self.save_layout_state)
+        self.root_splitter.splitterMoved.connect(self.save_layout_state)
 
         root = QWidget()
         root_layout = QVBoxLayout(root)
         root_layout.setContentsMargins(8, 8, 8, 8)
-        root_layout.setSpacing(8)
-        root_layout.addWidget(self.main_splitter, 1)
-        root_layout.addWidget(self.timeline, 0)
+        root_layout.setSpacing(0)
+        root_layout.addWidget(self.root_splitter, 1)
         self.setCentralWidget(root)
+        self.restore_layout_state()
 
     def _connect_signals(self) -> None:
         self.asset_panel.asset_selected.connect(self.select_clip_from_asset)
@@ -413,9 +440,52 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(message, timeout)
 
     def reset_layout(self) -> None:
-        self.main_splitter.setSizes([330, 790, 320])
+        self._apply_default_layout()
+        self.save_layout_state()
         self.timeline.zoom_slider.setValue(52)
         self.statusBar().showMessage(t("status.layout_reset"), 3000)
+
+    def _apply_default_layout(self) -> None:
+        self._set_splitter_by_ratio(self.main_splitter, DEFAULT_MAIN_SPLITTER_RATIO, 1440)
+        self._set_splitter_by_ratio(self.root_splitter, DEFAULT_ROOT_SPLITTER_RATIO, 860)
+
+    def restore_layout_state(self) -> None:
+        layout = self.app_settings.get("layout")
+        if not isinstance(layout, dict):
+            self._apply_default_layout()
+            return
+        main_sizes = self._valid_sizes(layout.get("main_splitter_sizes"), 3)
+        root_sizes = self._valid_sizes(layout.get("root_splitter_sizes"), 2)
+        if main_sizes:
+            self.main_splitter.setSizes(main_sizes)
+        else:
+            self._set_splitter_by_ratio(self.main_splitter, DEFAULT_MAIN_SPLITTER_RATIO, 1440)
+        if root_sizes:
+            self.root_splitter.setSizes(root_sizes)
+        else:
+            self._set_splitter_by_ratio(self.root_splitter, DEFAULT_ROOT_SPLITTER_RATIO, 860)
+
+    def save_layout_state(self, *args: object) -> None:
+        self.app_settings["layout"] = {
+            "main_splitter_sizes": self.main_splitter.sizes(),
+            "root_splitter_sizes": self.root_splitter.sizes(),
+        }
+        save_app_settings(self.app_settings)
+
+    def _set_splitter_by_ratio(self, splitter: QSplitter, ratio: tuple[int, ...], total: int) -> None:
+        ratio_total = sum(ratio) or 1
+        splitter.setSizes([max(1, round(total * value / ratio_total)) for value in ratio])
+
+    def _valid_sizes(self, sizes: object, count: int) -> list[int] | None:
+        if not isinstance(sizes, list) or len(sizes) != count:
+            return None
+        try:
+            normalized = [int(size) for size in sizes]
+        except (TypeError, ValueError):
+            return None
+        if any(size <= 0 for size in normalized):
+            return None
+        return normalized
 
     def show_about(self) -> None:
         QMessageBox.information(self, t("dialog.about_title"), t("dialog.about_body"))

@@ -231,11 +231,10 @@ class TimelineCanvas(QWidget):
 
     def _draw_playhead(self, painter: QPainter) -> None:
         x = self.label_w
-        painter.setPen(QPen(QColor("#6aa5ff"), 2))
+        bg = self.palette().window().color()
+        playhead_color = bg.lighter(175) if bg.lightness() < 128 else bg.darker(135)
+        painter.setPen(QPen(playhead_color, 1))
         painter.drawLine(x, 0, x, self.height() - 10)
-        painter.setBrush(QColor("#6aa5ff"))
-        painter.setPen(Qt.NoPen)
-        painter.drawPolygon([QPoint(x - 7, 2), QPoint(x + 7, 2), QPoint(x, 12)])
 
     def _draw_track(
         self,
