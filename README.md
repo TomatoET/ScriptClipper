@@ -1,12 +1,12 @@
 # ScriptClipper
 
-ScriptClipper is a local desktop application for editing video scripts and related project data. It is built with Python and PySide6, with an offline-first workflow for importing text, organizing A-roll and B-roll material, editing clip metadata, and exporting script tables.
+ScriptClipper is a local desktop application for editing video scripts and related project data. It is built with Python and PySide6, with an offline-first workflow for importing text, organizing A-Roll and B-Roll material, editing clip metadata, and exporting script tables.
 
 ## Features
 
 - Local PySide6 desktop interface.
-- TXT import that splits script text into editable A-roll assets.
-- A-roll and B-roll asset panels with drag-and-drop timeline placement.
+- TXT import that splits script text into editable A-Roll assets.
+- A-Roll and B-Roll asset panels with drag-and-drop timeline placement.
 - Timeline view with zoom controls, clip selection, and simple rhythm preview.
 - Clip metadata editing for script copy, visual notes, sound notes, and duration.
 - Project save and open support using local JSON project data.
@@ -51,7 +51,7 @@ A future Windows build can use PyInstaller or a similar packager. A starting poi
 
 ```powershell
 pip install pyinstaller
-pyinstaller --windowed --name ScriptClipper main.py
+pyinstaller --windowed --name ScriptClipper --icon assets/icons/app-icon.ico main.py
 ```
 
 That command is not yet validated as an official release build. Before publishing binaries, verify the generated app launches correctly, includes the Qt resources, and can save, open, import, and export files.

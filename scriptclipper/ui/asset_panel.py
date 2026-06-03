@@ -4,7 +4,7 @@ from PySide6.QtCore import QByteArray, QDataStream, QIODevice, Qt, Signal
 from PySide6.QtGui import QDrag
 from PySide6.QtWidgets import QFrame, QLabel, QListWidget, QListWidgetItem, QTabWidget, QVBoxLayout, QWidget
 
-from scriptclipper.core.i18n import t
+from scriptclipper.core.i18n import roll_display_name, t
 from scriptclipper.core.project_model import ARollAsset, BRollAsset
 
 
@@ -87,7 +87,7 @@ class AssetPanel(QWidget):
         for index, asset in enumerate(assets, start=1):
             item = QListWidgetItem()
             item.setData(Qt.UserRole, asset.id)
-            card = self._make_card(f"#{index:02d}  A-roll  {asset.duration:.1f}s", asset.text)
+            card = self._make_card(f"#{index:02d}  {roll_display_name('a_roll')}  {asset.duration:.1f}s", asset.text)
             item.setSizeHint(card.sizeHint())
             self.a_list.addItem(item)
             self.a_list.setItemWidget(item, card)
@@ -100,7 +100,7 @@ class AssetPanel(QWidget):
         for index, asset in enumerate(assets, start=1):
             item = QListWidgetItem()
             item.setData(Qt.UserRole, asset.id)
-            card = self._make_card(f"#{index:02d}  B-roll  {asset.duration:.1f}s", asset.title, asset.note)
+            card = self._make_card(f"#{index:02d}  {roll_display_name('b_roll')}  {asset.duration:.1f}s", asset.title, asset.note)
             item.setSizeHint(card.sizeHint())
             self.b_list.addItem(item)
             self.b_list.setItemWidget(item, card)

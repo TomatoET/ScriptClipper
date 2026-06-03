@@ -7,13 +7,16 @@ from PySide6.QtCore import QByteArray, QDataStream, QIODevice, QPoint, QRect, Qt
 from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QScrollArea, QSlider, QVBoxLayout, QWidget
 
-from scriptclipper.core.i18n import t
+from scriptclipper.core.i18n import roll_display_name, t
 from scriptclipper.core.project_model import MIN_CLIP_DURATION, ProjectModel, TimelineClip
 from scriptclipper.ui.asset_panel import A_ROLL_MIME_TYPE, B_ROLL_MIME_TYPE
 
 
 TIMELINE_CLIP_MIME_TYPE = "application/x-scriptclipper-timeline-clip"
 EDGE_HIT_PX = 8
+SNAP_GRID_SECONDS = 0.5
+SNAP_THRESHOLD_SECONDS = 0.15
+SNAP_THRESHOLD_PX = 8
 
 
 def seconds_to_pixels(seconds: float, pixels_per_second: int) -> int:
@@ -25,7 +28,7 @@ def pixels_to_seconds(pixels: int, pixels_per_second: int) -> float:
 
 
 def snap_time(seconds: float) -> float:
-    return round(max(0.0, seconds) * 2) / 2
+    return round(max(0.0, seconds) / SNAP_GRID_SECONDS) * SNAP_GRID_SECONDS
 
 
 def format_time(seconds: float) -> str:
@@ -63,6 +66,23 @@ class DragState:
     start_pos: QPoint
     original_start: float
     original_duration: float
+
+
+@dataclass(frozen=True)
+class SnapPoint:
+    time: float
+    clip_id: str
+    clip_title: str
+    clip_type: str
+    edge: str
+
+
+@dataclass(frozen=True)
+class SnapResult:
+    start: float
+    duration: float
+    guide_time: float | None
+    message: str | None = None
 
 
 class RhythmPreview(QWidget):
@@ -134,6 +154,8 @@ class TimelineCanvas(QWidget):
         self.clip_rects: dict[str, tuple[str, int, QRect]] = {}
         self.drag_state: DragState | None = None
         self.preview_ranges: dict[str, tuple[float, float]] = {}
+        self.snap_guide_time: float | None = None
+        self.snap_message: str | None = None
         self.pixels_per_second = 52
         self.scroll_x = 0
         self.label_w = 112
@@ -166,7 +188,9 @@ class TimelineCanvas(QWidget):
         if not self.project:
             return
         width = self.label_w + seconds_to_pixels(self.project.timeline_duration(), self.pixels_per_second) + 180
-        self.setMinimumWidth(max(900, width))
+        target_width = max(900, width)
+        self.setMinimumWidth(target_width)
+        self.resize(target_width, max(self.minimumHeight(), self.height()))
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
@@ -183,10 +207,10 @@ class TimelineCanvas(QWidget):
         content_w = seconds_to_pixels(self.project.timeline_duration(), self.pixels_per_second)
         self._draw_ruler(painter, grid_color, text_color)
         self._draw_playhead(painter)
-        self._draw_track(painter, "B-roll", "b_roll", self.project.b_roll, self.label_w, top, content_w, QColor("#36b7ff"))
+        self._draw_track(painter, roll_display_name("b_roll"), "b_roll", self.project.b_roll, self.label_w, top, content_w, QColor("#36b7ff"))
         self._draw_track(
             painter,
-            "A-roll",
+            roll_display_name("a_roll"),
             "a_roll",
             self.project.a_roll,
             self.label_w,
@@ -194,6 +218,7 @@ class TimelineCanvas(QWidget):
             content_w,
             QColor("#f1b545"),
         )
+        self._draw_snap_guide(painter)
 
     def _tick_steps(self) -> tuple[float, float]:
         if self.pixels_per_second >= 90:
@@ -235,6 +260,15 @@ class TimelineCanvas(QWidget):
         playhead_color = bg.lighter(175) if bg.lightness() < 128 else bg.darker(135)
         painter.setPen(QPen(playhead_color, 1))
         painter.drawLine(x, 0, x, self.height() - 10)
+
+    def _draw_snap_guide(self, painter: QPainter) -> None:
+        if self.snap_guide_time is None or not self.drag_state:
+            return
+        bg = self.palette().window().color()
+        guide_color = bg.lighter(185) if bg.lightness() < 128 else bg.darker(140)
+        x = self.label_w + seconds_to_pixels(self.snap_guide_time, self.pixels_per_second)
+        painter.setPen(QPen(guide_color, 1, Qt.DashLine))
+        painter.drawLine(x, self.ruler_h, x, self.height() - 10)
 
     def _draw_track(
         self,
@@ -302,12 +336,16 @@ class TimelineCanvas(QWidget):
                 mode = self._interaction_mode(rect, pos)
                 self.drag_state = DragState(clip_id, mode, pos, clip.start_time, clip.duration)
                 self.preview_ranges = {clip_id: (clip.start_time, clip.duration)}
+                self.snap_guide_time = None
+                self.snap_message = None
                 self.setCursor(Qt.SizeHorCursor if mode != "move" else Qt.ClosedHandCursor)
                 self.update()
                 return
         self.selected_clip_id = None
         self.drag_state = None
         self.preview_ranges = {}
+        self.snap_guide_time = None
+        self.snap_message = None
         self.clip_selected.emit("")
         self.update()
 
@@ -320,10 +358,15 @@ class TimelineCanvas(QWidget):
             self._update_hover_cursor(pos)
             return
         delta_seconds = pixels_to_seconds(pos.x() - self.drag_state.start_pos.x(), self.pixels_per_second)
-        start, duration = self._preview_from_delta(delta_seconds)
+        result = self._preview_from_delta(delta_seconds)
+        start, duration = result.start, result.duration
         self.preview_ranges = {self.drag_state.clip_id: (start, duration)}
+        self.snap_guide_time = result.guide_time
+        self.snap_message = result.message
         if start <= 0.0 and self.drag_state.original_start + delta_seconds < 0:
             self.status_message.emit(t("timeline.before_zero"), 2000)
+        elif self.snap_message:
+            self.status_message.emit(self.snap_message, 0)
         else:
             self.status_message.emit(t("timeline.resizing", start=start, duration=duration) if self.drag_state.mode != "move" else t("timeline.move_to", time=start), 0)
         self.update()
@@ -336,6 +379,8 @@ class TimelineCanvas(QWidget):
         start, duration = self.preview_ranges.get(state.clip_id, (state.original_start, state.original_duration))
         self.drag_state = None
         self.preview_ranges = {}
+        self.snap_guide_time = None
+        self.snap_message = None
         self.unsetCursor()
         if state.mode == "move":
             if abs(start - state.original_start) >= 0.001:
@@ -355,21 +400,66 @@ class TimelineCanvas(QWidget):
             return "resize_right"
         return "move"
 
-    def _preview_from_delta(self, delta_seconds: float) -> tuple[float, float]:
+    def _preview_from_delta(self, delta_seconds: float) -> SnapResult:
         assert self.drag_state is not None
         state = self.drag_state
+        snap_points = self._snap_points(state.clip_id)
         if state.mode == "move":
-            return snap_time(state.original_start + delta_seconds), state.original_duration
+            raw_start = max(0.0, state.original_start + delta_seconds)
+            return self._snap_move(raw_start, state.original_duration, snap_points)
         if state.mode == "resize_right":
-            duration = max(MIN_CLIP_DURATION, snap_time(state.original_duration + delta_seconds))
+            raw_end = max(state.original_start + MIN_CLIP_DURATION, state.original_start + state.original_duration + delta_seconds)
+            end_snap = self._snap_edge(raw_end, snap_points)
+            end_time = max(state.original_start + MIN_CLIP_DURATION, end_snap[0])
+            duration = max(MIN_CLIP_DURATION, round(end_time - state.original_start, 1))
             if duration <= MIN_CLIP_DURATION:
                 self.status_message.emit(t("timeline.min_duration"), 2000)
-            return state.original_start, duration
+            return SnapResult(state.original_start, duration, end_snap[1], end_snap[2])
         right_edge = state.original_start + state.original_duration
-        next_start = min(snap_time(state.original_start + delta_seconds), right_edge - MIN_CLIP_DURATION)
+        raw_start = min(state.original_start + delta_seconds, right_edge - MIN_CLIP_DURATION)
+        start_snap = self._snap_edge(raw_start, snap_points)
+        next_start = min(start_snap[0], right_edge - MIN_CLIP_DURATION)
         next_start = max(0.0, next_start)
-        duration = max(MIN_CLIP_DURATION, snap_time(right_edge - next_start))
-        return next_start, duration
+        duration = max(MIN_CLIP_DURATION, round(right_edge - next_start, 1))
+        return SnapResult(next_start, duration, start_snap[1], start_snap[2])
+
+    def _snap_move(self, raw_start: float, duration: float, snap_points: list[SnapPoint]) -> SnapResult:
+        start_snap = self._snap_edge(raw_start, snap_points)
+        end_snap = self._snap_edge(raw_start + duration, snap_points)
+        start_delta = abs(start_snap[0] - raw_start) if start_snap[1] is not None else float("inf")
+        end_delta = abs(end_snap[0] - (raw_start + duration)) if end_snap[1] is not None else float("inf")
+        if end_delta < start_delta:
+            start = max(0.0, round(end_snap[0] - duration, 1))
+            return SnapResult(start, duration, end_snap[1], end_snap[2])
+        return SnapResult(max(0.0, start_snap[0]), duration, start_snap[1], start_snap[2])
+
+    def _snap_edge(self, raw_time: float, snap_points: list[SnapPoint]) -> tuple[float, float | None, str | None]:
+        raw_time = max(0.0, raw_time)
+        threshold = min(SNAP_THRESHOLD_SECONDS, pixels_to_seconds(SNAP_THRESHOLD_PX, self.pixels_per_second))
+        nearest = min(snap_points, key=lambda point: abs(point.time - raw_time), default=None)
+        if nearest and abs(nearest.time - raw_time) <= threshold:
+            edge_key = "timeline.edge.start" if nearest.edge == "start" else "timeline.edge.end"
+            message = t(
+                "timeline.aligned_to_clip",
+                roll=roll_display_name(nearest.clip_type),
+                title=nearest.clip_title or nearest.clip_id,
+                edge=t(edge_key),
+            )
+            return round(max(0.0, nearest.time), 1), nearest.time, message
+        snapped = snap_time(raw_time)
+        return snapped, None, t("timeline.aligned_to_time", time=snapped)
+
+    def _snap_points(self, active_clip_id: str | None) -> list[SnapPoint]:
+        if not self.project:
+            return []
+        points: list[SnapPoint] = []
+        for clip in self.project.a_roll + self.project.b_roll:
+            if clip.id == active_clip_id:
+                continue
+            title = clip.title or clip.text or clip.id
+            points.append(SnapPoint(clip.start_time, clip.id, title, clip.type, "start"))
+            points.append(SnapPoint(clip.start_time + clip.duration, clip.id, title, clip.type, "end"))
+        return points
 
     def _update_hover_cursor(self, pos: QPoint) -> None:
         for _, _, rect in self.clip_rects.values():
@@ -423,6 +513,7 @@ class TimelineCanvas(QWidget):
 
 
 class TimelineWidget(QWidget):
+    add_aroll_requested = Signal()
     add_broll_requested = Signal()
     delete_requested = Signal()
     clip_selected = Signal(str)
@@ -434,6 +525,7 @@ class TimelineWidget(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.canvas = TimelineCanvas()
+        self.add_aroll_button = QPushButton()
         self.add_broll_button = QPushButton()
         self.delete_button = QPushButton()
         self.duration_label = QLabel()
@@ -456,6 +548,7 @@ class TimelineWidget(QWidget):
         button_row = QWidget()
         button_layout = QHBoxLayout(button_row)
         button_layout.setContentsMargins(0, 0, 0, 0)
+        button_layout.addWidget(self.add_aroll_button)
         button_layout.addWidget(self.add_broll_button)
         button_layout.addWidget(self.delete_button)
         button_layout.addStretch()
@@ -466,6 +559,7 @@ class TimelineWidget(QWidget):
         layout.addWidget(button_row)
         layout.addWidget(self.scroll_area)
 
+        self.add_aroll_button.clicked.connect(self.add_aroll_requested)
         self.add_broll_button.clicked.connect(self.add_broll_requested)
         self.delete_button.clicked.connect(self.delete_requested)
         self.zoom_slider.valueChanged.connect(self._set_zoom)
@@ -478,6 +572,7 @@ class TimelineWidget(QWidget):
         self.retranslate()
 
     def retranslate(self) -> None:
+        self.add_aroll_button.setText(t("timeline.add_aroll"))
         self.add_broll_button.setText(t("timeline.add_broll"))
         self.delete_button.setText(t("timeline.delete_selected"))
         self._update_zoom_label(self.zoom_slider.value())

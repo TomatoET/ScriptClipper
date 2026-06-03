@@ -74,6 +74,9 @@ class MainWindow(QMainWindow):
 
         self.view_menu = self.menuBar().addMenu("")
         self.reset_layout_action = self.view_menu.addAction("")
+        self.normalize_aroll_action = self.view_menu.addAction("")
+        self.normalize_broll_action = self.view_menu.addAction("")
+        self.view_menu.addSeparator()
         self.theme_menu = self.view_menu.addMenu("")
         for theme_name in THEMES:
             action = self.theme_menu.addAction(theme_name)
@@ -102,6 +105,8 @@ class MainWindow(QMainWindow):
         self.export_script_action.triggered.connect(self.export_traditional_script)
         self.delete_action.triggered.connect(self.delete_selected_clip)
         self.reset_layout_action.triggered.connect(self.reset_layout)
+        self.normalize_aroll_action.triggered.connect(lambda checked=False: self.normalize_track_spacing("a_roll"))
+        self.normalize_broll_action.triggered.connect(lambda checked=False: self.normalize_track_spacing("b_roll"))
         self.about_action.triggered.connect(self.show_about)
 
     def _build_layout(self) -> None:
@@ -157,6 +162,7 @@ class MainWindow(QMainWindow):
     def _connect_signals(self) -> None:
         self.asset_panel.asset_selected.connect(self.select_clip_from_asset)
         self.parameter_panel.clip_changed.connect(self.update_clip_fields)
+        self.timeline.add_aroll_requested.connect(self.add_aroll_clip)
         self.timeline.add_broll_requested.connect(self.add_broll_clip)
         self.timeline.delete_requested.connect(self.delete_selected_clip)
         self.timeline.clip_selected.connect(self.select_clip)
@@ -181,6 +187,8 @@ class MainWindow(QMainWindow):
         self.delete_action.setText(t("menu.delete_selected"))
         self.view_menu.setTitle(t("menu.view"))
         self.reset_layout_action.setText(t("menu.reset_layout"))
+        self.normalize_aroll_action.setText(t("menu.normalize_aroll"))
+        self.normalize_broll_action.setText(t("menu.normalize_broll"))
         self.theme_menu.setTitle(t("menu.theme"))
         self.language_menu.setTitle(t("menu.language"))
         self.zh_action.setText(t("menu.language.zh"))
@@ -343,10 +351,16 @@ class MainWindow(QMainWindow):
         self._show_overlap_warning(clip.type)
 
     def add_broll_clip(self) -> None:
-        clip = self.project.add_b_roll_clip()
+        clip = self.project.add_b_roll_placeholder(t("placeholder.broll.title"), t("placeholder.broll.content"))
         self.selected_clip_id = clip.id
         self.refresh_all()
         self.statusBar().showMessage(t("status.added_broll_placeholder"), 3000)
+
+    def add_aroll_clip(self) -> None:
+        clip = self.project.add_a_roll_placeholder(t("placeholder.aroll.title"), t("placeholder.aroll.content"))
+        self.selected_clip_id = clip.id
+        self.refresh_all()
+        self.statusBar().showMessage(t("status.added_aroll_placeholder"), 3000)
 
     def select_clip(self, clip_id: str, update_canvas: bool = True) -> None:
         self.selected_clip_id = clip_id or None
@@ -444,6 +458,12 @@ class MainWindow(QMainWindow):
         self.save_layout_state()
         self.timeline.zoom_slider.setValue(52)
         self.statusBar().showMessage(t("status.layout_reset"), 3000)
+
+    def normalize_track_spacing(self, track_name: str) -> None:
+        self.project.normalize_track_spacing(track_name)
+        self.refresh_all()
+        status_key = "status.normalized_aroll" if track_name == "a_roll" else "status.normalized_broll"
+        self.statusBar().showMessage(t(status_key), 3000)
 
     def _apply_default_layout(self) -> None:
         self._set_splitter_by_ratio(self.main_splitter, DEFAULT_MAIN_SPLITTER_RATIO, 1440)

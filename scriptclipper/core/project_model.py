@@ -8,6 +8,8 @@ from typing import Any
 
 
 MIN_CLIP_DURATION = 0.5
+DEFAULT_PLACEHOLDER_DURATION = 3.0
+DEFAULT_TRACK_GAP_SECONDS = 0.2
 
 DEFAULT_SETTINGS = {
     "aspect_ratio": "9:16",
@@ -209,6 +211,42 @@ class TimelineClip:
         return clip
 
     @classmethod
+    def new_aroll_placeholder(
+        cls,
+        title: str,
+        text: str,
+        duration: float = DEFAULT_PLACEHOLDER_DURATION,
+    ) -> "TimelineClip":
+        clip = cls(
+            id=make_id("clip"),
+            type="a_roll",
+            title=title,
+            text=text,
+            duration=max(MIN_CLIP_DURATION, float(duration)),
+            track="a_roll",
+        )
+        clip.ensure_detail_defaults()
+        return clip
+
+    @classmethod
+    def new_broll_placeholder(
+        cls,
+        title: str,
+        text: str,
+        duration: float = DEFAULT_PLACEHOLDER_DURATION,
+    ) -> "TimelineClip":
+        clip = cls(
+            id=make_id("clip"),
+            type="b_roll",
+            title=title,
+            text=text,
+            duration=max(MIN_CLIP_DURATION, float(duration)),
+            track="b_roll",
+        )
+        clip.ensure_detail_defaults()
+        return clip
+
+    @classmethod
     def from_dict(cls, data: dict[str, Any], clip_type: str, default_start: float = 0.0) -> "TimelineClip":
         normalized_type = normalize_clip_type(str(data.get("type", clip_type)))
         details = data.get("details") if isinstance(data.get("details"), dict) else {}
@@ -314,6 +352,13 @@ class ProjectModel:
         self.dirty = True
         return clip
 
+    def add_a_roll_placeholder(self, title: str, text: str, start_time: float | None = None) -> TimelineClip:
+        clip = TimelineClip.new_aroll_placeholder(title, text, DEFAULT_PLACEHOLDER_DURATION)
+        clip.start_time = self._clip_start("a_roll", start_time)
+        self.a_roll.append(clip)
+        self.dirty = True
+        return clip
+
     def add_b_roll_clip(self, source_id: str | None = None, start_time: float | None = None) -> TimelineClip:
         if source_id:
             asset = next((item for item in self.broll_asset_pool if item.id == source_id), None)
@@ -323,6 +368,13 @@ class ProjectModel:
                 clip = TimelineClip.new_broll(self.settings.get("broll_default_duration", 3), len(self.b_roll) + 1)
         else:
             clip = TimelineClip.new_broll(self.settings.get("broll_default_duration", 3), len(self.b_roll) + 1)
+        clip.start_time = self._clip_start("b_roll", start_time)
+        self.b_roll.append(clip)
+        self.dirty = True
+        return clip
+
+    def add_b_roll_placeholder(self, title: str, text: str, start_time: float | None = None) -> TimelineClip:
+        clip = TimelineClip.new_broll_placeholder(title, text, DEFAULT_PLACEHOLDER_DURATION)
         clip.start_time = self._clip_start("b_roll", start_time)
         self.b_roll.append(clip)
         self.dirty = True
@@ -378,7 +430,18 @@ class ProjectModel:
 
     def next_start_time(self, track_name: str) -> float:
         track = self.a_roll if track_name == "a_roll" else self.b_roll
-        return round(max((clip.start_time + clip.duration for clip in track), default=0.0), 1)
+        if not track:
+            return 0.0
+        latest_end = max(clip.start_time + clip.duration for clip in track)
+        return round(latest_end + DEFAULT_TRACK_GAP_SECONDS, 1)
+
+    def normalize_track_spacing(self, track_name: str, gap: float = DEFAULT_TRACK_GAP_SECONDS) -> None:
+        track = self.a_roll if track_name == "a_roll" else self.b_roll
+        cursor = 0.0
+        for clip in sorted(track, key=lambda item: (item.start_time, item.id)):
+            clip.start_time = round(cursor, 1)
+            cursor = clip.start_time + max(MIN_CLIP_DURATION, clip.duration) + gap
+        self.dirty = True
 
     def timeline_duration(self) -> float:
         return max(
