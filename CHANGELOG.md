@@ -13,6 +13,7 @@ Initial preview release of ScriptClipper.
 - Main window, asset panel, parameter panel, script editor, and timeline widget.
 - Windows launch helper via `run_as_admin.bat`.
 - Project documentation, MIT license, release changelog, repository instructions, and Git ignore rules.
+- Open-source project documentation, including contribution and security guidance.
 
 ### Usage
 
@@ -24,3 +25,4 @@ Initial preview release of ScriptClipper.
 - No packaged installer, standalone executable, or release ZIP is available yet.
 - Release is source-only and requires a local Python environment.
 - Automated tests and CI are not configured yet.
+- Official binary packaging is not configured yet.
