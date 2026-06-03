@@ -2,27 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
-## v0.1.0 - 2026-06-03
-
-Initial preview release of ScriptClipper.
+## v0.1.0 - Initial Preview
 
 ### Added
 
-- Python/PySide6 desktop application entrypoint.
-- ScriptClipper package structure with core project model, file I/O, script export helpers, resources, and UI modules.
-- Main window, asset panel, parameter panel, script editor, and timeline widget.
-- Windows launch helper via `run_as_admin.bat`.
-- Project documentation, MIT license, release changelog, repository instructions, and Git ignore rules.
-- Open-source project documentation, including contribution and security guidance.
+- 初始版本发布。
+- 支持 A-Roll / B-Roll 双轨时间轴。
+- 支持结构化脚本编辑。
+- 支持内容细化调节。
+- 支持片段拖动和时长调整。
+- 支持工程保存和打开。
+- 支持 TXT 导入。
+- 支持导出。
+- 支持中英文界面切换。
+- 支持 Windows 打包运行。
 
-### Usage
+### Notes
 
-- Install dependencies with `pip install -r requirements.txt`.
-- Run the application with `python main.py`.
-
-### Known Issues
-
-- No packaged installer, standalone executable, or release ZIP is available yet.
-- Release is source-only and requires a local Python environment.
-- Automated tests and CI are not configured yet.
-- Official binary packaging is not configured yet.
+- 当前版本为预览版本，主要用于视频脚本和时间轴编排。
+- Windows 版本以绿色版 zip 附件发布。

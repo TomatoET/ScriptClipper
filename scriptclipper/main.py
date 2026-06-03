@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
+from scriptclipper.core.resources import resource_path
 from scriptclipper.ui.main_window import MainWindow
 
 
-def app_icon_path() -> Path:
-    root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
-    return root / "assets" / "icons" / "app-icon.ico"
+def app_icon_path():
+    return resource_path("assets", "icons", "app-icon.ico")
 
 
 def main() -> int:
@@ -22,7 +21,7 @@ def main() -> int:
     if not app_icon.isNull():
         app.setWindowIcon(app_icon)
 
-    style_path = Path(__file__).resolve().parent / "resources" / "style.qss"
+    style_path = resource_path("scriptclipper", "resources", "style.qss")
     if style_path.exists():
         app.setStyleSheet(style_path.read_text(encoding="utf-8"))
 
