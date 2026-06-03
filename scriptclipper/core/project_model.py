@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+MIN_CLIP_DURATION = 0.5
+
 DEFAULT_SETTINGS = {
     "aspect_ratio": "9:16",
     "platform": "抖音",
@@ -63,7 +65,7 @@ def estimate_duration(text: str) -> float:
     chinese_chars = len(re.findall(r"[\u4e00-\u9fff]", text))
     other_words = len(re.findall(r"[A-Za-z0-9]+", text))
     units = chinese_chars + other_words
-    return max(1.0, round(units / 5.0, 1))
+    return max(MIN_CLIP_DURATION, round(units / 5.0, 1))
 
 
 def split_script_text(text: str) -> list[str]:
@@ -104,7 +106,7 @@ class ARollAsset:
             type="a_roll",
             title=str(data.get("title", "")),
             text=str(data.get("text", data.get("content", ""))),
-            duration=float(data.get("duration", 1.0)),
+            duration=max(MIN_CLIP_DURATION, float(data.get("duration", 1.0))),
             note=str(data.get("note", "")),
             emotion=str(data.get("emotion", "")),
         )
@@ -135,7 +137,7 @@ class BRollAsset:
             id=str(data.get("id", make_id("b"))),
             type="b_roll",
             title=str(data.get("title", "画面占位")),
-            duration=float(data.get("duration", 3.0)),
+            duration=max(MIN_CLIP_DURATION, float(data.get("duration", 3.0))),
             note=str(data.get("note", "")),
         )
 
@@ -171,7 +173,7 @@ class TimelineClip:
             source_id=asset.id,
             title=asset.title or asset.id,
             text=asset.text,
-            duration=asset.duration,
+            duration=max(MIN_CLIP_DURATION, asset.duration),
             note=asset.note,
             emotion=asset.emotion,
             track="a_roll",
@@ -186,7 +188,7 @@ class TimelineClip:
             type="b_roll",
             source_id=asset.id,
             title=asset.title or f"画面{number}",
-            duration=max(1.0, float(asset.duration)),
+            duration=max(MIN_CLIP_DURATION, float(asset.duration)),
             note=asset.note,
             track="b_roll",
         )
@@ -199,7 +201,7 @@ class TimelineClip:
             id=make_id("clip"),
             type="b_roll",
             title=f"画面{number}",
-            duration=max(1.0, float(duration)),
+            duration=max(MIN_CLIP_DURATION, float(duration)),
             note="画面占位",
             track="b_roll",
         )
@@ -218,7 +220,7 @@ class TimelineClip:
             source_id=str(data.get("source_id", "")),
             title=str(data.get("title", "")),
             text=str(data.get("text", data.get("content", ""))),
-            duration=max(0.1, float(data.get("duration", 1.0))),
+            duration=max(MIN_CLIP_DURATION, float(data.get("duration", MIN_CLIP_DURATION))),
             note=note,
             emotion=str(data.get("emotion", details.get(emotion_key, ""))),
             start_time=max(0.0, float(data.get("startTime", data.get("start_time", default_start)))),
@@ -262,7 +264,7 @@ class TimelineClip:
             "content": self.text,
             "text": self.text,
             "startTime": round(float(self.start_time), 3),
-            "duration": self.duration,
+            "duration": round(float(self.duration), 3),
             "note": self.note,
             "emotion": self.emotion,
             "details": self.details,
@@ -302,17 +304,17 @@ class ProjectModel:
         self.dirty = True
         return len(self.asset_pool)
 
-    def add_a_roll_clip(self, source_id: str) -> TimelineClip | None:
+    def add_a_roll_clip(self, source_id: str, start_time: float | None = None) -> TimelineClip | None:
         asset = next((item for item in self.asset_pool if item.id == source_id), None)
         if not asset:
             return None
         clip = TimelineClip.from_a_asset(asset)
-        clip.start_time = self.next_start_time("a_roll")
+        clip.start_time = self._clip_start("a_roll", start_time)
         self.a_roll.append(clip)
         self.dirty = True
         return clip
 
-    def add_b_roll_clip(self, source_id: str | None = None) -> TimelineClip:
+    def add_b_roll_clip(self, source_id: str | None = None, start_time: float | None = None) -> TimelineClip:
         if source_id:
             asset = next((item for item in self.broll_asset_pool if item.id == source_id), None)
             if asset:
@@ -321,10 +323,15 @@ class ProjectModel:
                 clip = TimelineClip.new_broll(self.settings.get("broll_default_duration", 3), len(self.b_roll) + 1)
         else:
             clip = TimelineClip.new_broll(self.settings.get("broll_default_duration", 3), len(self.b_roll) + 1)
-        clip.start_time = self.next_start_time("b_roll")
+        clip.start_time = self._clip_start("b_roll", start_time)
         self.b_roll.append(clip)
         self.dirty = True
         return clip
+
+    def _clip_start(self, track_name: str, start_time: float | None) -> float:
+        if start_time is None:
+            return self.next_start_time(track_name)
+        return max(0.0, round(float(start_time), 1))
 
     def find_clip(self, clip_id: str | None) -> TimelineClip | None:
         if not clip_id:
@@ -357,6 +364,15 @@ class ProjectModel:
         if not clip:
             return None
         clip.start_time = max(0.0, round(float(start_time), 1))
+        self.dirty = True
+        return clip
+
+    def resize_clip(self, clip_id: str, start_time: float, duration: float) -> TimelineClip | None:
+        clip = self.find_clip(clip_id)
+        if not clip:
+            return None
+        clip.start_time = max(0.0, round(float(start_time), 1))
+        clip.duration = max(MIN_CLIP_DURATION, round(float(duration), 1))
         self.dirty = True
         return clip
 

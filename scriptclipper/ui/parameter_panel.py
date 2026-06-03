@@ -3,7 +3,8 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QDoubleSpinBox, QFormLayout, QLabel, QLineEdit, QPlainTextEdit, QVBoxLayout, QWidget
 
-from scriptclipper.core.project_model import TimelineClip
+from scriptclipper.core.i18n import t
+from scriptclipper.core.project_model import MIN_CLIP_DURATION, TimelineClip
 
 
 class ParameterPanel(QWidget):
@@ -16,9 +17,9 @@ class ParameterPanel(QWidget):
         self._loading = False
         self._rows: dict[str, tuple[QLabel, QWidget]] = {}
 
-        self.title = QLabel("内容细化调节")
+        self.title = QLabel()
         self.title.setObjectName("PanelTitle")
-        self.empty_label = QLabel("请选择一个 A-roll 或 B-roll 片段进行细化调节")
+        self.empty_label = QLabel()
         self.empty_label.setObjectName("MutedText")
         self.empty_label.setWordWrap(True)
 
@@ -34,7 +35,7 @@ class ParameterPanel(QWidget):
         self.keywords_edit = QLineEdit()
         self.sound_edit = QLineEdit()
         self.duration_edit = QDoubleSpinBox()
-        self.duration_edit.setRange(0.1, 9999.0)
+        self.duration_edit.setRange(MIN_CLIP_DURATION, 9999.0)
         self.duration_edit.setDecimals(1)
         self.duration_edit.setSingleStep(0.5)
         self.duration_edit.setSuffix("s")
@@ -45,19 +46,19 @@ class ParameterPanel(QWidget):
 
         self.form = QFormLayout()
         self.form.setLabelAlignment(Qt.AlignRight)
-        self._add_row("title", "片段标题", self.title_edit)
-        self._add_row("content", "口播内容 / 台词", self.content_edit)
-        self._add_row("tone", "语气", self.tone_edit)
-        self._add_row("speed", "语速", self.speed_edit)
-        self._add_row("pauseHint", "停顿提示", self.pause_hint_edit)
-        self._add_row("subtitleFocus", "字幕重点", self.subtitle_focus_edit)
-        self._add_row("shotSize", "镜头景别", self.shot_size_edit)
-        self._add_row("cameraMove", "运镜方式", self.camera_move_edit)
-        self._add_row("action", "动作说明", self.action_edit)
-        self._add_row("keywords", "画面关键词", self.keywords_edit)
-        self._add_row("sound", "音效 / 音乐", self.sound_edit)
-        self._add_row("duration", "预计时长", self.duration_edit)
-        self._add_row("note", "备注", self.note_edit)
+        self._add_row("title", self.title_edit)
+        self._add_row("content", self.content_edit)
+        self._add_row("tone", self.tone_edit)
+        self._add_row("speed", self.speed_edit)
+        self._add_row("pauseHint", self.pause_hint_edit)
+        self._add_row("subtitleFocus", self.subtitle_focus_edit)
+        self._add_row("shotSize", self.shot_size_edit)
+        self._add_row("cameraMove", self.camera_move_edit)
+        self._add_row("action", self.action_edit)
+        self._add_row("keywords", self.keywords_edit)
+        self._add_row("sound", self.sound_edit)
+        self._add_row("duration", self.duration_edit)
+        self._add_row("note", self.note_edit)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -80,16 +81,36 @@ class ParameterPanel(QWidget):
         self.sound_edit.textChanged.connect(self._emit_changed)
         self.duration_edit.valueChanged.connect(self._emit_changed)
         self.note_edit.textChanged.connect(self._emit_changed)
+        self.retranslate()
         self.set_clip(None)
 
-    def _add_row(self, key: str, label_text: str, widget: QWidget) -> None:
-        label = QLabel(label_text)
+    def _add_row(self, key: str, widget: QWidget) -> None:
+        label = QLabel()
         self.form.addRow(label, widget)
         self._rows[key] = (label, widget)
 
+    def retranslate(self) -> None:
+        self.title.setText(t("detail.title"))
+        self.empty_label.setText(t("detail.empty"))
+        labels = {
+            "title": t("detail.clip_title"),
+            "tone": t("detail.tone"),
+            "speed": t("detail.speed"),
+            "pauseHint": t("detail.pause_hint"),
+            "subtitleFocus": t("detail.subtitle_focus"),
+            "shotSize": t("detail.shot_size"),
+            "cameraMove": t("detail.camera_move"),
+            "action": t("detail.action"),
+            "keywords": t("detail.keywords"),
+            "sound": t("detail.sound"),
+            "duration": t("detail.duration"),
+            "note": t("detail.note"),
+        }
+        for key, text in labels.items():
+            self._rows[key][0].setText(text)
+        self._configure_rows(self.current_clip_type or "")
+
     def set_settings(self, settings: dict) -> None:
-        # Historical global settings are intentionally retained in project data
-        # but no longer shown in this panel.
         return
 
     def set_clip(self, clip: TimelineClip | None) -> None:
@@ -126,7 +147,7 @@ class ParameterPanel(QWidget):
             self.action_edit.clear()
             self.keywords_edit.clear()
             self.sound_edit.clear()
-            self.duration_edit.setValue(1.0)
+            self.duration_edit.setValue(MIN_CLIP_DURATION)
             self.note_edit.clear()
 
         self._configure_rows(clip.type if clip else "")
@@ -138,7 +159,7 @@ class ParameterPanel(QWidget):
         a_roll_rows = {"title", "content", "tone", "speed", "pauseHint", "subtitleFocus", "duration", "note"}
         b_roll_rows = {"title", "content", "shotSize", "cameraMove", "action", "keywords", "sound", "duration", "note"}
         visible_rows = a_roll_rows if clip_type == "a_roll" else b_roll_rows if clip_type == "b_roll" else set()
-        self._rows["content"][0].setText("画面内容" if clip_type == "b_roll" else "口播内容 / 台词")
+        self._rows["content"][0].setText(t("detail.b_content") if clip_type == "b_roll" else t("detail.a_content"))
         for key, (label, widget) in self._rows.items():
             visible = key in visible_rows
             label.setVisible(visible)

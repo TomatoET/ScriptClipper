@@ -3,7 +3,8 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QDoubleSpinBox, QFormLayout, QLabel, QLineEdit, QPlainTextEdit, QVBoxLayout, QWidget
 
-from scriptclipper.core.project_model import TimelineClip
+from scriptclipper.core.i18n import t
+from scriptclipper.core.project_model import MIN_CLIP_DURATION, TimelineClip
 
 
 class ScriptEditor(QWidget):
@@ -15,25 +16,27 @@ class ScriptEditor(QWidget):
         self.current_clip_type: str | None = None
         self._loading = False
 
-        self.header = QLabel("结构化脚本编辑区")
+        self.header = QLabel()
         self.header.setObjectName("PanelTitle")
-        self.empty_label = QLabel("选择时间轴中的 A-roll 或 B-roll 片段后可编辑脚本细节")
+        self.empty_label = QLabel()
         self.empty_label.setObjectName("MutedText")
+        self.empty_label.setWordWrap(True)
 
         self.title_edit = QLineEdit()
         self.text_edit = QPlainTextEdit()
         self.note_edit = QPlainTextEdit()
         self.emotion_edit = QLineEdit()
         self.duration_edit = QDoubleSpinBox()
-        self.duration_edit.setRange(0.1, 9999.0)
+        self.duration_edit.setRange(MIN_CLIP_DURATION, 9999.0)
         self.duration_edit.setDecimals(1)
         self.duration_edit.setSingleStep(0.5)
         self.duration_edit.setSuffix("s")
 
-        self.title_label = QLabel("标题")
-        self.text_label = QLabel("口播文案")
-        self.note_label = QLabel("画面备注")
-        self.emotion_label = QLabel("语气/节奏/音效")
+        self.title_label = QLabel()
+        self.text_label = QLabel()
+        self.note_label = QLabel()
+        self.emotion_label = QLabel()
+        self.duration_label = QLabel()
 
         self.form = QFormLayout()
         self.form.setLabelAlignment(Qt.AlignRight)
@@ -41,7 +44,7 @@ class ScriptEditor(QWidget):
         self.form.addRow(self.text_label, self.text_edit)
         self.form.addRow(self.note_label, self.note_edit)
         self.form.addRow(self.emotion_label, self.emotion_edit)
-        self.form.addRow("预计时长", self.duration_edit)
+        self.form.addRow(self.duration_label, self.duration_edit)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -55,7 +58,16 @@ class ScriptEditor(QWidget):
         self.note_edit.textChanged.connect(self._emit_changed)
         self.emotion_edit.textChanged.connect(self._emit_changed)
         self.duration_edit.valueChanged.connect(self._emit_changed)
+        self.retranslate()
         self.set_clip(None)
+
+    def retranslate(self) -> None:
+        self.header.setText(t("editor.title"))
+        self.empty_label.setText(t("editor.empty"))
+        self.title_label.setText(t("editor.clip_title"))
+        self.note_label.setText(t("editor.note"))
+        self.duration_label.setText(t("editor.duration"))
+        self._configure_labels(self.current_clip_type or "a_roll")
 
     def set_clip(self, clip: TimelineClip | None) -> None:
         self._loading = True
@@ -79,22 +91,16 @@ class ScriptEditor(QWidget):
             self.text_edit.clear()
             self.note_edit.clear()
             self.emotion_edit.clear()
-            self.duration_edit.setValue(1.0)
+            self.duration_edit.setValue(MIN_CLIP_DURATION)
         self._loading = False
 
     def _configure_labels(self, clip_type: str) -> None:
         if clip_type == "b_roll":
-            self.text_label.setText("画面内容")
-            self.note_label.setText("备注")
-            self.emotion_label.setText("音效 / 音乐")
-            self.text_edit.setPlaceholderText("补充镜头、景别、动作等画面内容")
-            self.note_edit.setPlaceholderText("补充导出脚本表的画面备注")
+            self.text_label.setText(t("editor.b_content"))
+            self.emotion_label.setText(t("editor.sound"))
         else:
-            self.text_label.setText("口播文案")
-            self.note_label.setText("备注")
-            self.emotion_label.setText("语气")
-            self.text_edit.setPlaceholderText("导出到传统脚本表的文案内容")
-            self.note_edit.setPlaceholderText("口播对应画面、字幕或动作提示")
+            self.text_label.setText(t("editor.a_content"))
+            self.emotion_label.setText(t("editor.tone"))
 
     def _emit_changed(self) -> None:
         if self._loading or not self.current_clip_id:
